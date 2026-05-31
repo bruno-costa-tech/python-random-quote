@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>◈ Market Intelligence</title>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+:root {
+  --bg-primary:    #080810;
+  --bg-secondary:  #0d0d1f;
+  --bg-card:       #0a0a18;
+  --border-dim:    #1a1a3a;
+  --border-mid:    #2a2a5a;
+  --text-primary:  #e0e0f0;
+  --text-secondary:#8888cc;
+  --text-muted:    #555588;
+  --green:         #639922;
+  --green-bright:  #7ab82a;
+  --amber:         #ef9f27;
+  --red:           #e24b4a;
+  --blue-accent:   #6666ff;
+  --blue-dim:      #1a1a6a;
+  --blue-mid:      #2222aa;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body,#root{height:100%;min-height:100vh;}
+body{background:var(--bg-primary);color:var(--text-primary);font-family:'Courier New',Courier,monospace;font-size:13px;-webkit-font-smoothing:antialiased;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:var(--bg-primary);}
+::-webkit-scrollbar-thumb{background:var(--border-mid);border-radius:2px;}
+.card{background:var(--bg-card);border:0.5px solid var(--border-dim);border-radius:4px;padding:14px 16px;}
+.section-title{font-size:10px;letter-spacing:3px;color:var(--text-muted);text-transform:uppercase;border-bottom:0.5px solid var(--border-dim);padding-bottom:6px;margin-bottom:14px;}
+.input{background:var(--bg-secondary);border:0.5px solid var(--border-dim);border-radius:4px;color:var(--text-primary);font-family:'Courier New',monospace;padding:8px 10px;font-size:13px;width:100%;transition:border-color .2s;}
+.input.populated{border-color:#2a5a2a;background:#0a1a0a;}
+.input.missing{border-color:#3a1a1a;}
+.input:focus{outline:none;border-color:var(--border-mid);}
+select.input option{background:var(--bg-secondary);color:var(--text-primary);}
+.btn-primary{background:var(--blue-dim);border:0.5px solid var(--blue-accent);color:#9999ff;font-family:'Courier New',monospace;font-size:11px;letter-spacing:2px;padding:10px 20px;border-radius:4px;cursor:pointer;text-transform:uppercase;transition:background .2s,opacity .2s;white-space:nowrap;}
+.btn-primary:hover:not(:disabled){background:var(--blue-mid);}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed;}
+.btn-secondary{background:transparent;border:0.5px solid var(--border-mid);color:var(--text-secondary);font-family:'Courier New',monospace;font-size:10px;letter-spacing:2px;padding:7px 14px;border-radius:4px;cursor:pointer;text-transform:uppercase;transition:border-color .2s;}
+.btn-secondary:hover:not(:disabled){border-color:var(--blue-accent);color:#9999ff;}
+.btn-secondary:disabled{opacity:.35;cursor:not-allowed;}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
+.dot-green{background:var(--green);box-shadow:0 0 6px var(--green);}
+.dot-amber{background:var(--amber);box-shadow:0 0 6px var(--amber);}
+.dot-red{background:var(--red);box-shadow:0 0 6px var(--red);}
+.dot-gray{background:#444466;}
+.bar-track{height:5px;background:#1a1a2e;border-radius:3px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:3px;transition:width .5s ease,background .5s ease;}
+.pos{color:var(--green-bright);}
+.neg{color:var(--red);}
+.neutral{color:var(--text-secondary);}
+.loader{display:inline-block;width:12px;height:12px;border:1.5px solid var(--border-mid);border-top-color:var(--blue-accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.output-block{background:var(--bg-secondary);border:0.5px solid var(--border-dim);border-radius:4px;padding:14px 16px;font-size:12px;line-height:1.75;color:var(--text-primary);white-space:pre-wrap;word-break:break-word;}
+.data-table{width:100%;border-collapse:collapse;font-size:12px;}
+.data-table th{font-size:9px;letter-spacing:2px;color:var(--text-muted);text-transform:uppercase;padding:6px 10px;border-bottom:0.5px solid var(--border-dim);text-align:left;font-weight:normal;}
+.data-table td{padding:8px 10px;border-bottom:0.5px solid rgba(26,26,58,.5);color:var(--text-primary);vertical-align:middle;}
+.data-table tr:last-child td{border-bottom:none;}
+.data-table tr:hover td{background:rgba(26,26,58,.4);}
+.error-msg{color:var(--red);font-size:11px;letter-spacing:1px;padding:8px 0;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+
+/* ─── API KEY MODAL ──────────────────────────────────────────── */
+const LS_KEY = 'mid_api_key';
+
+function ApiKeyModal({ onSave }) {
+  const [key, setKey] = React.useState('');
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(8,8,16,.95)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}>
+      <div className="card" style={{maxWidth:460,width:'90%'}}>
+        <div className="section-title">Configuração</div>
+        <p style={{fontSize:12,color:'var(--text-secondary)',marginBottom:16,lineHeight:1.6}}>
+          Introduz a tua Anthropic API key para activar a análise IA e a pesquisa de preços em tempo real.<br/>
+          A key é guardada apenas localmente no teu browser (localStorage).
+        </p>
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:10,color:'var(--text-muted)',letterSpacing:1,marginBottom:4}}>ANTHROPIC API KEY</div>
+          <input
+            type="password"
+            className="input"
+            placeholder="sk-ant-..."
+            value={key}
+            onChange={e => setKey(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && key.startsWith('sk-') && onSave(key)}
+          />
+        </div>
+        <div style={{display:'flex',gap:10,alignItems:'center'}}>
+          <button className="btn-primary" onClick={() => onSave(key)} disabled={!key.startsWith('sk-')}>
+            Guardar e Continuar
+          </button>
+          <span style={{fontSize:10,color:'var(--text-muted)'}}>
+            Sem key — funcionalidades IA desactivadas
+          </span>
+          <button className="btn-secondary" style={{marginLeft:'auto'}} onClick={() => onSave('')}>
+            Ignorar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── ANTHROPIC API ──────────────────────────────────────────── */
+async function callClaude({ prompt, useWebSearch = false, maxTokens = 1500, apiKey }) {
+  const body = {
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: maxTokens,
+    messages: [{ role: 'user', content: prompt }],
+  };
+  if (useWebSearch) body.tools = [{ type: 'web_search_20250305', name: 'web_search' }];
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
+  };
+  if (apiKey) headers['x-api-key'] = apiKey;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST', headers, body: JSON.stringify(body),
+  });
+  if (!res.ok) { const t = await res.text(); throw new Error(`API ${res.status}: ${t.slice(0,200)}`); }
+  const data = await res.json();
+  return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+}
+
+function parseJSON(text) {
+  const stripped = text.replace(/```[\w]*\n?/g, '').trim();
+  const match = stripped.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('Resposta sem JSON válido');
+  return JSON.parse(match[0]);
+}
+
+/* ─── SCORING ────────────────────────────────────────────────── */
+const MAX_PTS = 160;
+
+function calcScore(fields) {
+  let pts = 0; const signals = [];
+
+  const fl = parseFloat(fields.float);
+  if (!isNaN(fl)) {
+    if (fl < 2)       { pts+=35; signals.push({label:'Float micro (<2M)',pts:35}); }
+    else if (fl < 5)  { pts+=25; signals.push({label:'Float pequeno (<5M)',pts:25}); }
+    else if (fl < 20) { pts+=15; signals.push({label:'Float reduzido (<20M)',pts:15}); }
+  }
+  const sh = parseFloat(fields.short);
+  if (!isNaN(sh)) {
+    if (sh>=30)       { pts+=30; signals.push({label:'Short extremo (≥30%)',pts:30}); }
+    else if (sh>=20)  { pts+=20; signals.push({label:'Short alto (≥20%)',pts:20}); }
+    else if (sh>=10)  { pts+=10; signals.push({label:'Short moderado (≥10%)',pts:10}); }
+  }
+  const dtc = parseFloat(fields.dtc);
+  if (!isNaN(dtc)) {
+    if (dtc>=10)      { pts+=20; signals.push({label:'DTC crítico (≥10d)',pts:20}); }
+    else if (dtc>=5)  { pts+=12; signals.push({label:'DTC alto (≥5d)',pts:12}); }
+    else if (dtc>=2)  { pts+=5;  signals.push({label:'DTC moderado (≥2d)',pts:5}); }
+  }
+  const rv = parseFloat(fields.relvol);
+  if (!isNaN(rv)) {
+    if (rv>=5)        { pts+=25; signals.push({label:'RelVol explosivo (≥5x)',pts:25}); }
+    else if (rv>=3)   { pts+=18; signals.push({label:'RelVol forte (≥3x)',pts:18}); }
+    else if (rv>=2)   { pts+=10; signals.push({label:'RelVol elevado (≥2x)',pts:10}); }
+  }
+  const pm = parseFloat(fields.premkt);
+  if (!isNaN(pm) && pm>0) {
+    if (pm>=5)        { pts+=15; signals.push({label:'Premarket forte (≥5M)',pts:15}); }
+    else if (pm>=1)   { pts+=8;  signals.push({label:'Premarket activo (≥1M)',pts:8}); }
+  }
+  const inst = parseFloat(fields.inst);
+  if (!isNaN(inst)) {
+    if (inst<5)       { pts+=10; signals.push({label:'Inst próprio mínimo (<5%)',pts:10}); }
+    else if (inst<20) { pts+=5;  signals.push({label:'Inst baixo (<20%)',pts:5}); }
+  }
+  const catPts = {none:0,news:15,earnings:18,fda:25,contract:12,squeeze:8};
+  const cp = catPts[fields.catalyst||'none']||0;
+  if (cp>0) signals.push({label:`Catalisador: ${fields.catalyst}`,pts:cp});
+  pts+=cp;
+
+  return { score: Math.min(100, Math.round((pts/MAX_PTS)*100)), signals };
+}
+
+function scoreTier(score) {
+  if (score>=75) return {label:'ALTO RISCO DE EXPLOSÃO',color:'#e24b4a'};
+  if (score>=55) return {label:'SETUP INTERESSANTE',color:'#ef9f27'};
+  if (score>=35) return {label:'POTENCIAL MODERADO',color:'#639922'};
+  return {label:'SETUP FRACO',color:'#444466'};
+}
+
+/* ─── SIGNALS ────────────────────────────────────────────────── */
+function indSignal(key, value) {
+  const v = parseFloat(value); if (isNaN(v)) return 'gray';
+  switch(key) {
+    case 'yield10y': return v<3.5?'green':v<=4.5?'amber':'red';
+    case 'dxy':      return v<95?'green':v<=103?'amber':'red';
+    case 'fg_iwda':  return v>40?'green':v>=20?'amber':'red';
+    case 'fg_crypto':return v>50?'green':v>=25?'amber':'red';
+    case 'btcflows': return v>200?'green':v>=-200?'amber':'red';
+    case 'eurusd':   return v>1.05?'green':v>=1?'amber':'red';
+    default:         return 'gray';
+  }
+}
+
+function assetSignal(asset, ind) {
+  const sigs = asset==='iwda'
+    ? [indSignal('yield10y',ind.yield10y), indSignal('dxy',ind.dxy), indSignal('fg_iwda',ind.feargreed), indSignal('eurusd',ind.eurusd)]
+    : [indSignal('yield10y',ind.yield10y), indSignal('dxy',ind.dxy), indSignal('fg_crypto',ind.feargreed), indSignal('btcflows',ind.btcflows)];
+  const valid = sigs.filter(s=>s!=='gray');
+  if (!valid.length) return 'gray';
+  const avg = valid.map(s=>s==='green'?2:s==='amber'?1:0).reduce((a,b)=>a+b,0)/valid.length;
+  return avg>=1.5?'green':avg>=0.8?'amber':'red';
+}
+
+/* ─── SHARED COMPONENTS ──────────────────────────────────────── */
+function Dot({s}) {
+  return <span className={`dot dot-${s||'gray'}`} />;
+}
+
+function Loader() { return <span className="loader" />; }
+
+/* ─── HEADER / NAV ───────────────────────────────────────────── */
+function Header({apiKey, onClearKey}) {
+  return (
+    <header style={{borderBottom:'0.5px solid var(--border-dim)',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--bg-secondary)'}}>
+      <span style={{fontSize:13,letterSpacing:4,color:'var(--text-secondary)'}}>◈ MARKET INTELLIGENCE</span>
+      <div style={{display:'flex',alignItems:'center',gap:14}}>
+        <span style={{fontSize:9,color:apiKey?'var(--green)':'var(--text-muted)',letterSpacing:1}}>
+          {apiKey ? '● API KEY ACTIVA' : '○ SEM API KEY'}
+        </span>
+        {apiKey && (
+          <button className="btn-secondary" style={{padding:'3px 8px',fontSize:9}} onClick={onClearKey}>Limpar Key</button>
+        )}
+        <span style={{fontSize:10,color:'var(--text-muted)',letterSpacing:2}}>BRUNO COSTA · DUBAI</span>
+      </div>
+    </header>
+  );
+}
+
+function Nav({active, onChange}) {
+  const tabs = [{id:'dashboard',label:'DASHBOARD'},{id:'detector',label:'DETECTOR'},{id:'portfolio',label:'PORTFÓLIO'}];
+  return (
+    <nav style={{display:'flex',gap:2,padding:'10px 20px',borderBottom:'0.5px solid var(--border-dim)',background:'var(--bg-secondary)'}}>
+      {tabs.map(t=>(
+        <button key={t.id} onClick={()=>onChange(t.id)} style={{
+          background:active===t.id?'var(--blue-dim)':'transparent',
+          border:active===t.id?'0.5px solid var(--blue-accent)':'0.5px solid transparent',
+          color:active===t.id?'#9999ff':'var(--text-muted)',
+          fontFamily:'Courier New,monospace',fontSize:10,letterSpacing:2,
+          padding:'6px 14px',borderRadius:3,cursor:'pointer',transition:'all .2s',
+        }}>{t.label}</button>
+      ))}
+    </nav>
+  );
+}
+
+/* ─── TAB 1: DASHBOARD ───────────────────────────────────────── */
+const INDICATORS = [
+  {key:'yield10y',label:'US 10Y Yield (%)',    placeholder:'4.55', hint:'fred.stlouisfed.org'},
+  {key:'dxy',     label:'DXY',                 placeholder:'97.5', hint:'TradingView: DXY'},
+  {key:'feargreed',label:'Fear & Greed (0-100)',placeholder:'25',  hint:'CNN Fear & Greed'},
+  {key:'btcflows',label:'BTC ETF Flows ($M)',  placeholder:'-733', hint:'SoSoValue.com'},
+  {key:'eurusd',  label:'EUR/USD',             placeholder:'1.085',hint:'TradingView: EURUSD'},
+];
+
+const PRICE_ASSETS = [
+  {key:'iwda',    label:'IWDA.AS',        unit:'€'},
+  {key:'btc',     label:'BTC',            unit:'€'},
+  {key:'eth',     label:'ETH',            unit:'€'},
+  {key:'xrp',     label:'XRP',            unit:'$'},
+  {key:'sol',     label:'SOL',            unit:'$'},
+  {key:'sui',     label:'SUI',            unit:'$'},
+  {key:'copper',  label:'Copper ETF',     unit:''},
+  {key:'uranium', label:'Uranium ETF',    unit:''},
+  {key:'water',   label:'Water ETF',      unit:''},
+  {key:'robot',   label:'Robotics ETF',   unit:''},
+  {key:'commodity',label:'Commodity ETF', unit:''},
+  {key:'europe',  label:'Europe ETF',     unit:''},
+];
+
+const PRICE_FETCH_PROMPT = `
+Pesquisa os preços actuais de mercado para: IWDA.AS (EUR), BTC-EUR, ETH-EUR, XRP-USD, SOL-USD, SUI-USD,
+ETF Copper Miners Global (CPMC), ETF Uranium (URNM ou URA), ETF Global Water (AGUA), ETF Automation & Robotics (RBOT),
+ETF Diversified Commodity Swap (EXXY), ETF Core MSCI Europe (IEUR).
+
+Devolve APENAS JSON válido sem markdown:
+{"iwda":"123.45","iwda_chg":0.23,"btc":"67500","btc_chg":-1.2,"eth":"1840","eth_chg":-0.5,
+"xrp":"1.34","xrp_chg":0.8,"sol":"85.94","sol_chg":1.1,"sui":"1.04","sui_chg":-0.3,
+"copper":"12.45","copper_chg":0.5,"uranium":"23.10","uranium_chg":-0.2,
+"water":"45.67","water_chg":0.1,"robot":"34.56","robot_chg":1.3,
+"commodity":"18.90","commodity_chg":-0.4,"europe":"67.89","europe_chg":0.6}
+Se não disponível usa null.
+`.trim();
+
+function buildBriefingPrompt(ind, prices) {
+  const priceStr = Object.entries(prices).filter(([k])=>!k.endsWith('_chg')).map(([k,v])=>`${k.toUpperCase()}: ${v}`).join(' | ');
+  return `
+És um analista financeiro sénior. Utilizador português em Dubai.
+Portfólio: IWDA 35%, Certificados Aforro PT 33%, PPR 18%, BTC+ETH 7%, Cash 7%.
+XTB satélite: Copper Miners 41%, Uranium 25%, Automation 10%, Water 5%, Commodity 9%, MSCI Europe 9%.
+Objectivo: acumular 400-600k AED para imóvel Dubai em 0-24 meses. Poupança: ~4.381€/mês.
+
+INDICADORES:
+US 10Y Yield: ${ind.yield10y||'n/d'}% | DXY: ${ind.dxy||'n/d'} | Fear&Greed: ${ind.feargreed||'n/d'}/100
+BTC ETF Flows: ${ind.btcflows||'n/d'}$M | EUR/USD: ${ind.eurusd||'n/d'}
+
+PREÇOS: ${priceStr||'n/d'}
+
+Briefing em português (PT), directo, sem emojis, sem markdown especial:
+
+1. DIAGNÓSTICO DE MERCADO
+[2-3 frases]
+
+2. IMPACTO NO PORTFÓLIO
+IWDA: [análise]
+BTC/ETH: [análise]
+XTB Satélite: [análise]
+
+3. SINAL MACRO DOMINANTE
+[factor mais importante]
+
+4. O QUE VIGIAR ESTA SEMANA
+- [item 1]
+- [item 2]
+- [item 3]
+
+5. TABELA RESUMO
+Activo | Preço | Var% | Sinal
+IWDA | ... | ... | COMPRAR/MANTER/REDUZIR
+BTC | ... | ... | COMPRAR/MANTER/REDUZIR
+ETH | ... | ... | COMPRAR/MANTER/REDUZIR
+XRP | ... | ... | VIGIAR/NEUTRO
+SOL | ... | ... | VIGIAR/NEUTRO
+SUI | ... | ... | VIGIAR/NEUTRO
+`.trim();
+}
+
+function DashboardTab({apiKey}) {
+  const [ind, setInd] = React.useState({yield10y:'',dxy:'',feargreed:'',btcflows:'',eurusd:''});
+  const [prices, setPrices] = React.useState({});
+  const [loadingPrices, setLoadingPrices] = React.useState(false);
+  const [briefing, setBriefing] = React.useState('');
+  const [loadingBrief, setLoadingBrief] = React.useState(false);
+  const [err, setErr] = React.useState('');
+
+  async function fetchPrices() {
+    if (!apiKey) { setErr('API key necessária.'); return; }
+    setLoadingPrices(true); setErr('');
+    try {
+      const raw = await callClaude({prompt:PRICE_FETCH_PROMPT, useWebSearch:true, maxTokens:1000, apiKey});
+      const data = parseJSON(raw);
+      data.updatedAt = new Date().toLocaleString('pt-PT');
+      setPrices(data);
+    } catch(e) { setErr(`Erro preços: ${e.message}`); }
+    finally { setLoadingPrices(false); }
+  }
+
+  async function fetchBriefing() {
+    if (!apiKey) { setErr('API key necessária.'); return; }
+    setLoadingBrief(true); setErr(''); setBriefing('');
+    try {
+      const result = await callClaude({prompt:buildBriefingPrompt(ind,prices), maxTokens:2000, apiKey});
+      setBriefing(result.trim());
+    } catch(e) { setErr(`Erro briefing: ${e.message}`); }
+    finally { setLoadingBrief(false); }
+  }
+
+  return (
+    <div>
+      {/* Price bar */}
+      <div className="card" style={{marginBottom:12}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+          <div className="section-title" style={{marginBottom:0}}>Preços</div>
+          <button className="btn-secondary" onClick={fetchPrices} disabled={loadingPrices}>
+            {loadingPrices ? <Loader/> : 'Actualizar'}
+          </button>
+        </div>
+        <div style={{display:'flex',overflowX:'auto',gap:0}}>
+          {PRICE_ASSETS.map(a=>{
+            const p = prices[a.key];
+            const chg = prices[`${a.key}_chg`];
+            const isPos = chg>0, isNeg = chg<0;
+            return (
+              <div key={a.key} style={{display:'flex',flexDirection:'column',padding:'8px 14px',borderRight:'0.5px solid var(--border-dim)',minWidth:90,flexShrink:0}}>
+                <span style={{fontSize:9,color:'var(--text-muted)',letterSpacing:2,marginBottom:3}}>{a.label}</span>
+                <span style={{fontSize:14}}>{p ? `${a.unit}${p}` : '—'}</span>
+                {chg!=null && !isNaN(chg) && <span style={{fontSize:10,color:isPos?'var(--green-bright)':isNeg?'var(--red)':'var(--text-muted)'}}>{isPos?'+':''}{Number(chg).toFixed(2)}%</span>}
+              </div>
+            );
+          })}
+        </div>
+        {prices.updatedAt && <div style={{fontSize:9,color:'var(--text-muted)',marginTop:8,letterSpacing:1}}>Actualizado: {prices.updatedAt}</div>}
+      </div>
+
+      {/* Macro indicators */}
+      <div className="card" style={{marginBottom:12}}>
+        <div className="section-title">Indicadores Macro</div>
+        <div style={{display:'grid',gap:10}}>
+          {INDICATORS.map(i=>{
+            const sig = i.key==='feargreed' ? indSignal('fg_iwda',ind[i.key]) : indSignal(i.key,ind[i.key]);
+            return (
+              <div key={i.key} style={{display:'grid',gridTemplateColumns:'1fr auto',gap:10,alignItems:'center'}}>
+                <div>
+                  <div style={{fontSize:10,color:'var(--text-muted)',letterSpacing:1,marginBottom:4}}>
+                    {i.label} <span style={{color:'#333366',fontSize:9}}>[{i.hint}]</span>
+                  </div>
+                  <input type="number" className={`input ${ind[i.key]?'populated':''}`}
+                    placeholder={i.placeholder} value={ind[i.key]||''}
+                    onChange={e=>setInd(p=>({...p,[i.key]:e.target.value}))} step="any"/>
+                </div>
+                <div style={{paddingTop:18}}><Dot s={sig}/></div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{marginTop:16,paddingTop:14,borderTop:'0.5px solid var(--border-dim)'}}>
+          <div className="section-title" style={{marginBottom:10}}>Sinal Agregado</div>
+          <div style={{display:'flex',gap:20,flexWrap:'wrap'}}>
+            {['iwda','btc','eth'].map(a=>(
+              <div key={a} style={{display:'flex',alignItems:'center',gap:8}}>
+                <Dot s={assetSignal(a,ind)}/>
+                <span style={{fontSize:11,letterSpacing:2,color:'var(--text-secondary)'}}>{a.toUpperCase()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div style={{display:'flex',gap:10,marginBottom:12,flexWrap:'wrap'}}>
+        <button className="btn-primary" onClick={fetchPrices} disabled={loadingPrices}>
+          {loadingPrices ? <><Loader/> <span style={{marginLeft:8}}>A buscar...</span></> : 'Actualizar Preços'}
+        </button>
+        <button className="btn-primary" onClick={fetchBriefing} disabled={loadingBrief}>
+          {loadingBrief ? <><Loader/> <span style={{marginLeft:8}}>A gerar...</span></> : 'Gerar Briefing'}
+        </button>
+      </div>
+
+      {err && <div className="error-msg">{err}</div>}
+
+      {briefing && (
+        <div className="card">
+          <div className="section-title">Briefing Diário</div>
+          <div className="output-block">{briefing}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── TAB 2: DETECTOR ────────────────────────────────────────── */
+const FIELDS_DEF = [
+  {id:'price',   label:'Preço ($)',           mandatory:false, type:'number'},
+  {id:'mcap',    label:'Market Cap ($M)',      mandatory:false, type:'number'},
+  {id:'float',   label:'Float (M acções)',     mandatory:true,  type:'number'},
+  {id:'short',   label:'Short Float (%)',      mandatory:true,  type:'number'},
+  {id:'dtc',     label:'Days to Cover',        mandatory:true,  type:'number'},
+  {id:'relvol',  label:'Relative Volume (x)',  mandatory:true,  type:'number'},
+  {id:'premkt',  label:'Premarket Vol (M)',    mandatory:false, type:'number'},
+  {id:'inst',    label:'Inst. Ownership (%)',  mandatory:true,  type:'number'},
+  {id:'catalyst',label:'Catalisador',          mandatory:false, type:'select'},
+];
+const CAT_OPTS = [{value:'none',label:'Nenhum'},{value:'news',label:'Notícia (+15)'},{value:'earnings',label:'Resultados (+18)'},{value:'fda',label:'FDA Approval (+25)'},{value:'contract',label:'Contrato (+12)'},{value:'squeeze',label:'Short Squeeze (+8)'}];
+const EMPTY_FIELDS = {price:'',mcap:'',float:'',short:'',dtc:'',relvol:'',premkt:'',inst:'',catalyst:'none'};
+
+function buildFetchPrompt(ticker) {
+  return `Pesquisa dados actuais para a acção ${ticker.toUpperCase()} no Finviz e Yahoo Finance.
+Float, short interest, days to cover (short ratio), relative volume, inst. ownership, premarket volume.
+Devolve APENAS JSON válido sem markdown:
+{"price":null,"marketCapM":null,"floatM":null,"shortFloatPct":null,"daysToCover":null,
+"relativeVolume":null,"premarketVolM":null,"instOwnershipPct":null,
+"catalyst":"none","catalystNote":"","dataNote":"fonte e data"}
+Se não disponível usa null.`;
+}
+
+function buildAnalysisPrompt(ticker, fields) {
+  const {score,signals} = calcScore(fields);
+  return `
+És trader especialista em micro caps e momentum stocks.
+TICKER: ${ticker} | SCORE: ${score}/100
+SINAIS: ${signals.map(s=>s.label).join(', ')||'nenhum'}
+Float: ${fields.float||'n/d'}M | Short: ${fields.short||'n/d'}% | DTC: ${fields.dtc||'n/d'}d
+RelVol: ${fields.relvol||'n/d'}x | Premarket: ${fields.premkt||'n/d'}M | Inst: ${fields.inst||'n/d'}%
+MCap: $${fields.mcap||'n/d'}M | Preço: $${fields.price||'n/d'} | Catalisador: ${fields.catalyst||'none'}
+
+Responde em português (PT), sem emojis:
+
+1. DIAGNÓSTICO
+[2 frases sobre o setup]
+
+2. TIPO DE MOVIMENTO
+[squeeze, news catalyst, combinação?]
+
+3. RISCO PRINCIPAL
+[O que pode correr mal?]
+
+4. ENTRADA / STOP
+[Condições e níveis concretos]
+
+5. PROBABILIDADE REAL
+[% honesta com justificação]`.trim();
+}
+
+function DetectorTab({apiKey}) {
+  const [ticker, setTicker] = React.useState('');
+  const [activeTicker, setActiveTicker] = React.useState('');
+  const [fields, setFields] = React.useState(EMPTY_FIELDS);
+  const [loadingFetch, setLoadingFetch] = React.useState(false);
+  const [loadingAnalysis, setLoadingAnalysis] = React.useState(false);
+  const [dataNote, setDataNote] = React.useState('');
+  const [analysis, setAnalysis] = React.useState('');
+  const [err, setErr] = React.useState('');
+
+  const {score,signals} = calcScore(fields);
+  const tier = scoreTier(score);
+  const hasRequired = fields.float && fields.short && fields.dtc && fields.relvol && fields.inst;
+
+  async function handleFetch() {
+    if (!ticker.trim()) return;
+    if (!apiKey) { setErr('API key necessária.'); return; }
+    setLoadingFetch(true); setErr(''); setDataNote(''); setAnalysis('');
+    try {
+      const raw = await callClaude({prompt:buildFetchPrompt(ticker), useWebSearch:true, maxTokens:800, apiKey});
+      const data = parseJSON(raw);
+      setFields({
+        price:    data.price!=null?String(data.price):'',
+        mcap:     data.marketCapM!=null?String(data.marketCapM):'',
+        float:    data.floatM!=null?String(data.floatM):'',
+        short:    data.shortFloatPct!=null?String(data.shortFloatPct):'',
+        dtc:      data.daysToCover!=null?String(data.daysToCover):'',
+        relvol:   data.relativeVolume!=null?String(data.relativeVolume):'',
+        premkt:   data.premarketVolM!=null?String(data.premarketVolM):'',
+        inst:     data.instOwnershipPct!=null?String(data.instOwnershipPct):'',
+        catalyst: data.catalyst||'none',
+      });
+      setActiveTicker(ticker.toUpperCase());
+      if (data.dataNote) setDataNote(data.dataNote+(data.catalystNote?' | '+data.catalystNote:''));
+    } catch(e) { setErr(`Erro: ${e.message}`); }
+    finally { setLoadingFetch(false); }
+  }
+
+  async function handleAnalysis() {
+    if (!activeTicker || !hasRequired || !apiKey) return;
+    setLoadingAnalysis(true); setErr(''); setAnalysis('');
+    try {
+      const result = await callClaude({prompt:buildAnalysisPrompt(activeTicker,fields), maxTokens:1200, apiKey});
+      setAnalysis(result.trim());
+    } catch(e) { setErr(`Erro análise: ${e.message}`); }
+    finally { setLoadingAnalysis(false); }
+  }
+
+  function setField(k,v) { setFields(p=>({...p,[k]:v})); }
+
+  return (
+    <div>
+      {/* Ticker search */}
+      <div className="card" style={{marginBottom:12}}>
+        <div className="section-title">Ticker</div>
+        <div style={{display:'flex',gap:10,marginBottom:12}}>
+          <input type="text" className="input" placeholder="ex: ASTC, GME, AMC..."
+            value={ticker} onChange={e=>setTicker(e.target.value.toUpperCase())}
+            onKeyDown={e=>e.key==='Enter'&&handleFetch()} style={{maxWidth:200}}/>
+          <button className="btn-primary" onClick={handleFetch} disabled={loadingFetch||!ticker.trim()}>
+            {loadingFetch?<><Loader/> <span style={{marginLeft:8}}>A buscar...</span></>:'Buscar Dados'}
+          </button>
+        </div>
+        {dataNote && <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:10,letterSpacing:1}}>{dataNote}</div>}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:10}}>
+          {FIELDS_DEF.map(f=>{
+            const val = fields[f.id]||'';
+            const populated = val!==''&&val!=='none';
+            const missing = f.mandatory&&!val;
+            const cls = `input ${populated?'populated':missing?'missing':''}`;
+            return (
+              <div key={f.id}>
+                <div style={{fontSize:10,color:'var(--text-muted)',letterSpacing:1,marginBottom:4}}>
+                  {f.label}{f.mandatory&&<span style={{color:'var(--red)',marginLeft:2}}>*</span>}
+                </div>
+                {f.type==='select'
+                  ? <select className={cls} value={val||'none'} onChange={e=>setField(f.id,e.target.value)}>
+                      {CAT_OPTS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  : <input type="number" className={cls} value={val}
+                      onChange={e=>setField(f.id,e.target.value)} step="any"/>
+                }
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Score */}
+      <div className="card" style={{marginBottom:12}}>
+        <div className="section-title">Score de Explosão</div>
+        <div style={{display:'flex',alignItems:'flex-end',gap:16,marginBottom:14,flexWrap:'wrap'}}>
+          <div>
+            <span style={{fontSize:44,color:tier.color,lineHeight:1}}>{score}</span>
+            <span style={{fontSize:14,color:'var(--text-muted)',marginLeft:4}}>/100</span>
+          </div>
+          <div>
+            {activeTicker&&<div style={{fontSize:16,color:'var(--text-secondary)',letterSpacing:3,marginBottom:4}}>{activeTicker}</div>}
+            <div style={{fontSize:10,letterSpacing:2,padding:'3px 8px',border:`0.5px solid ${tier.color}`,color:tier.color,borderRadius:3,display:'inline-block'}}>{tier.label}</div>
+          </div>
+        </div>
+        <div className="bar-track" style={{marginBottom:14}}>
+          <div className="bar-fill" style={{width:`${score}%`,background:tier.color}}/>
+        </div>
+        {signals.length>0 ? (
+          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+            {signals.map((s,i)=>(
+              <span key={i} style={{fontSize:10,padding:'3px 8px',background:'var(--bg-secondary)',border:'0.5px solid var(--border-dim)',borderRadius:3,color:'var(--text-secondary)'}}>
+                {s.label}
+              </span>
+            ))}
+          </div>
+        ) : <div style={{fontSize:10,color:'var(--text-muted)'}}>Preenche os campos para calcular o score.</div>}
+      </div>
+
+      {/* Analysis */}
+      <div style={{marginBottom:12}}>
+        <button className="btn-primary" onClick={handleAnalysis}
+          disabled={loadingAnalysis||!activeTicker||!hasRequired}>
+          {loadingAnalysis?<><Loader/> <span style={{marginLeft:8}}>A analisar...</span></>:'Análise Completa'}
+        </button>
+        {activeTicker&&!hasRequired&&<span style={{fontSize:10,color:'var(--amber)',marginLeft:12}}>Preenche os campos obrigatórios (*).</span>}
+      </div>
+
+      {err&&<div className="error-msg">{err}</div>}
+      {analysis&&(
+        <div className="card">
+          <div className="section-title">Análise IA — {activeTicker}</div>
+          <div className="output-block">{analysis}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── TAB 3: PORTFOLIO ───────────────────────────────────────── */
+const DEFAULT_ASSETS = [
+  {name:'Dinheiro Active Saver',  value:'3441',  expectedReturn:'1.0',  notes:'Fundo de emergência'},
+  {name:'Certificados de Aforro', value:'16137', expectedReturn:'3.0',  notes:'Baixo risco, garantido'},
+  {name:'PPR Real Vida',          value:'8600',  expectedReturn:'1.5',  notes:'Considerar PPR indexado'},
+  {name:'ETF IWDA MSCI World',    value:'17000', expectedReturn:'9.0',  notes:'Motor de crescimento'},
+  {name:'XTB ETF Plan',          value:'705',   expectedReturn:'5.0',  notes:'Crescer aportes'},
+  {name:'Criptomoedas BTC+ETH',  value:'3600',  expectedReturn:'10.0', notes:'Manter ≤10% portfólio'},
+];
+
+function project(init, monthly, annPct, years) {
+  const r = annPct/100/12; const pts = [];
+  let v = init;
+  for (let y=0; y<=years; y++) {
+    pts.push({y, v:Math.round(v)});
+    for (let m=0;m<12;m++) v = v*(1+r)+parseFloat(monthly||0);
+  }
+  return pts;
+}
+
+function MiniChart({data, years}) {
+  const maxV = Math.max(...data.map(d=>d.v), 1);
+  const W=600, H=140, PL=60, PR=20, PT=10, PB=26;
+  const CW=W-PL-PR, CH=H-PT-PB;
+  const pts = data.map((d,i)=>`${PL+(i/(data.length-1))*CW},${PT+(1-d.v/maxV)*CH}`);
+  const yTicks = [0,.25,.5,.75,1].map(f=>({y:PT+(1-f)*CH, label:`€${Math.round(maxV*f/1000)}k`}));
+  const xL = [0,Math.round(years/4),Math.round(years/2),Math.round(years*3/4),years];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',maxWidth:W,height:'auto'}}>
+      <defs>
+        <linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#6666ff" stopOpacity=".15"/>
+          <stop offset="100%" stopColor="#6666ff" stopOpacity=".01"/>
+        </linearGradient>
+      </defs>
+      {yTicks.map((t,i)=>(
+        <g key={i}>
+          <line x1={PL} y1={t.y} x2={W-PR} y2={t.y} stroke="#1a1a3a" strokeWidth=".5"/>
+          <text x={PL-6} y={t.y+4} textAnchor="end" fontSize="9" fill="#555588" fontFamily="Courier New">{t.label}</text>
+        </g>
+      ))}
+      {xL.map(yr=>(
+        <text key={yr} x={PL+(yr/years)*CW} y={H-6} textAnchor="middle" fontSize="9" fill="#555588" fontFamily="Courier New">{yr}a</text>
+      ))}
+      <polygon points={`${PL},${PT+CH} ${pts.join(' ')} ${W-PR},${PT+CH}`} fill="url(#ag)"/>
+      <polyline points={pts.join(' ')} fill="none" stroke="#6666ff" strokeWidth="1.5"/>
+    </svg>
+  );
+}
+
+function PortfolioTab() {
+  const [assets, setAssets] = React.useState(DEFAULT_ASSETS);
+  const [monthly, setMonthly] = React.useState('4381');
+  const [years, setYears] = React.useState(30);
+  const [inflation, setInflation] = React.useState('2.5');
+
+  const total = assets.reduce((s,a)=>s+(parseFloat(a.value)||0),0);
+  const wReturn = total>0
+    ? assets.reduce((s,a)=>s+(parseFloat(a.value)||0)/total*(parseFloat(a.expectedReturn)||0),0)
+    : 5.2;
+  const annReturn = total*(wReturn/100);
+  const nom = project(total, monthly, wReturn, years);
+  const real = project(total, monthly, wReturn-parseFloat(inflation||0), years);
+  const finalNom = nom[nom.length-1]?.v||0;
+  const finalReal = real[real.length-1]?.v||0;
+  const passive = finalReal*(wReturn/100)/12;
+
+  function setAsset(i,k,v) { setAssets(p=>p.map((a,j)=>j===i?{...a,[k]:v}:a)); }
+  function yearsTo(t) { const f=nom.find(p=>p.v>=t); return f?f.y:`>${years}`; }
+
+  return (
+    <div>
+      {/* Summary */}
+      <div className="card" style={{marginBottom:12}}>
+        <div className="section-title">Resumo</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:14}}>
+          {[
+            ['TOTAL PORTFÓLIO',     `€${total.toLocaleString('pt-PT',{maximumFractionDigits:0})}`],
+            ['RETORNO PONDERADO',   `${wReturn.toFixed(2)}%`],
+            ['RETORNO ANUAL EST.',  `€${annReturn.toLocaleString('pt-PT',{maximumFractionDigits:0})}`],
+            ['RETORNO MENSAL EST.', `€${(annReturn/12).toLocaleString('pt-PT',{maximumFractionDigits:0})}`],
+            ['APORTE MENSAL',       `€${(parseFloat(monthly)||0).toLocaleString('pt-PT',{maximumFractionDigits:0})}`],
+          ].map(([l,v])=>(
+            <div key={l}>
+              <div style={{fontSize:9,color:'var(--text-muted)',letterSpacing:2,marginBottom:4}}>{l}</div>
+              <div style={{fontSize:20}}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Asset table */}
+      <div className="card" style={{marginBottom:12}}>
+        <div className="section-title">Activos</div>
+        <div style={{overflowX:'auto'}}>
+          <table className="data-table">
+            <thead>
+              <tr><th>Activo</th><th>Valor (€)</th><th>%</th><th>Retorno (%)</th><th>Retorno Anual (€)</th><th>Notas</th></tr>
+            </thead>
+            <tbody>
+              {assets.map((a,i)=>{
+                const v=parseFloat(a.value)||0, r=parseFloat(a.expectedReturn)||0;
+                const pct=total>0?(v/total*100).toFixed(1):'0.0';
+                return (
+                  <tr key={i}>
+                    <td><input className="input" value={a.name} onChange={e=>setAsset(i,'name',e.target.value)} style={{fontSize:11,minWidth:140}}/></td>
+                    <td><input type="number" className="input" value={a.value} onChange={e=>setAsset(i,'value',e.target.value)} style={{width:90}}/></td>
+                    <td><span style={{color:'var(--text-secondary)',fontSize:12}}>{pct}%</span></td>
+                    <td><input type="number" className="input" value={a.expectedReturn} onChange={e=>setAsset(i,'expectedReturn',e.target.value)} step=".1" style={{width:70}}/></td>
+                    <td><span style={{color:'var(--green-bright)',fontSize:12}}>€{(v*r/100).toLocaleString('pt-PT',{maximumFractionDigits:0})}</span></td>
+                    <td><input className="input" value={a.notes||''} onChange={e=>setAsset(i,'notes',e.target.value)} style={{fontSize:11,minWidth:140,color:'var(--text-muted)'}}/></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td style={{color:'var(--text-secondary)',fontSize:11,paddingTop:10}}>TOTAL</td>
+                <td style={{fontSize:13,paddingTop:10}}>€{total.toLocaleString('pt-PT',{maximumFractionDigits:0})}</td>
+                <td style={{color:'var(--text-secondary)',fontSize:11,paddingTop:10}}>100%</td>
+                <td></td>
+                <td style={{color:'var(--green-bright)',fontSize:13,paddingTop:10}}>€{annReturn.toLocaleString('pt-PT',{maximumFractionDigits:0})}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* Projections config */}
+      <div className="card" style={{marginBottom:12}}>
+        <div className="section-title">Configuração Projecção</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:12}}>
+          {[
+            {label:'Aporte Mensal (€)', val:monthly, set:setMonthly, type:'number'},
+            {label:'Horizonte (anos)',   val:years,   set:v=>setYears(Math.max(1,Math.min(50,parseInt(v)||30))), type:'number'},
+            {label:'Inflação (%)',       val:inflation, set:setInflation, type:'number', step:'.1'},
+          ].map(f=>(
+            <div key={f.label}>
+              <div style={{fontSize:10,color:'var(--text-muted)',letterSpacing:1,marginBottom:4}}>{f.label}</div>
+              <input type={f.type} className="input populated" value={f.val}
+                onChange={e=>f.set(e.target.value)} step={f.step||'1'}/>
+            </div>
+          ))}
+          <div>
+            <div style={{fontSize:10,color:'var(--text-muted)',letterSpacing:1,marginBottom:4}}>RETORNO PONDERADO</div>
+            <div style={{padding:'8px 10px',color:'var(--green-bright)',fontSize:14}}>{wReturn.toFixed(2)}%</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="card" style={{marginBottom:12}}>
+        <div className="section-title">Projecção {years} Anos</div>
+        <MiniChart data={nom} years={years}/>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14,marginTop:14}}>
+          {[
+            ['VALOR NOMINAL',`€${finalNom.toLocaleString('pt-PT',{maximumFractionDigits:0})}','var(--text-primary)'],
+            [`VALOR REAL (${inflation}% infl.)`,`€${finalReal.toLocaleString('pt-PT',{maximumFractionDigits:0})}','var(--text-secondary)'],
+            ['RENDIMENTO PASSIVO/MÊS',`€${Math.round(passive).toLocaleString('pt-PT')}`,passive>=5000?'var(--green-bright)':'var(--amber)'],
+          ].map(([l,v,c])=>(
+            <div key={l}>
+              <div style={{fontSize:9,color:'var(--text-muted)',letterSpacing:2,marginBottom:4}}>{l}</div>
+              <div style={{fontSize:22,color:c||'var(--text-primary)'}}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Milestones */}
+      <div className="card">
+        <div className="section-title">Marcos</div>
+        <table className="data-table">
+          <thead><tr><th>Objectivo</th><th>Target</th><th>Anos Estimados</th></tr></thead>
+          <tbody>
+            {[
+              ['Entrada imóvel Dubai (400k AED)', 99000],
+              ['Independência financeira (5k€/mês)', 1200000],
+            ].map(([l,t])=>(
+              <tr key={l}>
+                <td style={{color:'var(--text-secondary)',fontSize:11}}>{l}</td>
+                <td>€{t.toLocaleString('pt-PT')}</td>
+                <td style={{color:'var(--amber)'}}>{yearsTo(t)}{typeof yearsTo(t)==='number'?' anos':''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ─── ROOT APP ───────────────────────────────────────────────── */
+function App() {
+  const [tab, setTab] = React.useState('dashboard');
+  const [apiKey, setApiKey] = React.useState(() => localStorage.getItem(LS_KEY)||'');
+  const [showModal, setShowModal] = React.useState(() => !localStorage.getItem(LS_KEY));
+
+  function saveKey(k) {
+    if (k) localStorage.setItem(LS_KEY, k);
+    else localStorage.removeItem(LS_KEY);
+    setApiKey(k);
+    setShowModal(false);
+  }
+  function clearKey() { saveKey(''); setShowModal(true); }
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',minHeight:'100vh'}}>
+      {showModal && <ApiKeyModal onSave={saveKey}/>}
+      <Header apiKey={apiKey} onClearKey={clearKey}/>
+      <Nav active={tab} onChange={setTab}/>
+      <main style={{flex:1,padding:'16px 20px',maxWidth:960,width:'100%',margin:'0 auto'}}>
+        {tab==='dashboard' && <DashboardTab apiKey={apiKey}/>}
+        {tab==='detector'  && <DetectorTab  apiKey={apiKey}/>}
+        {tab==='portfolio' && <PortfolioTab/>}
+      </main>
+      <footer style={{borderTop:'0.5px solid var(--border-dim)',padding:'8px 20px',fontSize:9,color:'var(--text-muted)',letterSpacing:2,display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:4}}>
+        <span>MARKET INTELLIGENCE v1.0</span>
+        <span>Não é aconselhamento financeiro · Uso pessoal</span>
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
