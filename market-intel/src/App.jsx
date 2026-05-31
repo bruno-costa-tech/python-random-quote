@@ -1,17 +1,7 @@
 import { useState } from 'react';
-import Header from './components/Header.jsx';
 import Navigation from './components/Navigation.jsx';
-import ApiKeyModal from './components/ApiKeyModal.jsx';
-import { API_KEY_STORAGE, getApiKey } from './lib/anthropic.js';
-
-import PriceBar from './components/dashboard/PriceBar.jsx';
-import MarketSignals from './components/dashboard/MarketSignals.jsx';
-import DailyBriefing from './components/dashboard/DailyBriefing.jsx';
-
-import TickerSearch from './components/detector/TickerSearch.jsx';
-import ScoreDisplay from './components/detector/ScoreDisplay.jsx';
-import AnalysisOutput from './components/detector/AnalysisOutput.jsx';
-
+import DetectorTab from './components/detector/DetectorTab.jsx';
+import IpoTab from './components/ipo/IpoTab.jsx';
 import PortfolioSummary from './components/portfolio/PortfolioSummary.jsx';
 import AssetList from './components/portfolio/AssetList.jsx';
 import Projections from './components/portfolio/Projections.jsx';
@@ -25,129 +15,52 @@ const DEFAULT_PORTFOLIO = [
   { name: 'Criptomoedas BTC+ETH',  value: '3600',  expectedReturn: '10.0', notes: 'Manter ≤10% portfólio' },
 ];
 
-const EMPTY_FIELDS = {
-  price: '', mcap: '', float: '', short: '',
-  dtc: '', relvol: '', premkt: '', inst: '', catalyst: 'none',
-};
-
 export default function App() {
-  const [tab, setTab] = useState('dashboard');
-
-  // API key state — prompt on first load if none stored
-  const [apiKey, setApiKey] = useState(() => getApiKey());
-  const [showKeyModal, setShowKeyModal] = useState(() => !getApiKey());
-
-  function saveApiKey(key) {
-    try {
-      if (key) localStorage.setItem(API_KEY_STORAGE, key);
-      else localStorage.removeItem(API_KEY_STORAGE);
-    } catch { /* localStorage unavailable */ }
-    setApiKey(key);
-    setShowKeyModal(false);
-  }
-
-  // Dashboard state
-  const [indicators, setIndicators] = useState({
-    yield10y: '', dxy: '', feargreed: '', btcflows: '', eurusd: '',
-  });
-  const [prices, setPrices] = useState({});
-  const [loadingPrices, setLoadingPrices] = useState(false);
-
-  // Detector state
-  const [detectorTicker, setDetectorTicker] = useState('');
-  const [detectorFields, setDetectorFields] = useState(EMPTY_FIELDS);
-
-  // Portfolio state
+  const [tab, setTab] = useState('detector');
   const [assets, setAssets] = useState(DEFAULT_PORTFOLIO);
   const [monthlyContrib, setMonthlyContrib] = useState('4381');
 
-  function handleIndicatorChange(key, val) {
-    setIndicators(prev => ({ ...prev, [key]: val }));
-  }
-
-  function handlePricesUpdate(data, isLoading) {
-    setLoadingPrices(isLoading);
-    if (data) setPrices(data);
-  }
-
-  function handleDetectorFetched(ticker, mapped) {
-    setDetectorTicker(ticker);
-    setDetectorFields(mapped);
-  }
-
-  function handleDetectorFieldChange(key, val) {
-    setDetectorFields(prev => ({ ...prev, [key]: val }));
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      {showKeyModal && (
-        <ApiKeyModal
-          currentKey={apiKey}
-          onSave={saveApiKey}
-          onClose={() => setShowKeyModal(false)}
-        />
-      )}
-      <Header hasKey={!!apiKey} onOpenKeyModal={() => setShowKeyModal(true)} />
-      <Navigation active={tab} onChange={setTab} />
 
-      <main style={{ flex: 1, padding: '16px 20px', maxWidth: 960, width: '100%', margin: '0 auto' }}>
+      {/* Header */}
+      <header style={{
+        borderBottom: '1px solid var(--border-dim)',
+        padding: '14px 22px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: 'rgba(255,255,255,0.85)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        position: 'sticky', top: 0, zIndex: 100,
+      }}>
+        <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: -0.3, color: 'var(--text-primary)' }}>
+          Market Intelligence
+        </span>
+        <Navigation active={tab} onChange={setTab} />
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
+          Bruno Costa · Dubai
+        </span>
+      </header>
 
-        {tab === 'dashboard' && (
-          <div>
-            <PriceBar
-              prices={prices}
-              loading={loadingPrices}
-              onRefresh={() => {}}
-            />
-            <MarketSignals values={indicators} onChange={handleIndicatorChange} />
-            <DailyBriefing
-              indicators={indicators}
-              prices={prices}
-              onPricesUpdate={handlePricesUpdate}
-              loadingPrices={loadingPrices}
-            />
-          </div>
-        )}
-
-        {tab === 'detector' && (
-          <div>
-            <TickerSearch
-              fields={detectorFields}
-              onFieldChange={handleDetectorFieldChange}
-              onFetched={handleDetectorFetched}
-            />
-            <ScoreDisplay ticker={detectorTicker} fields={detectorFields} />
-            <AnalysisOutput ticker={detectorTicker} fields={detectorFields} />
-          </div>
-        )}
-
+      <main style={{ flex: 1, padding: '20px', maxWidth: 1040, width: '100%', margin: '0 auto' }}>
+        {tab === 'detector'  && <DetectorTab />}
+        {tab === 'ipo'       && <IpoTab />}
         {tab === 'portfolio' && (
-          <div>
+          <div style={{ display: 'grid', gap: 16 }}>
             <PortfolioSummary assets={assets} monthlyContrib={monthlyContrib} />
             <AssetList assets={assets} onChange={setAssets} />
-            <Projections
-              assets={assets}
-              monthlyContrib={monthlyContrib}
-              onMonthlyContribChange={setMonthlyContrib}
-            />
+            <Projections assets={assets} monthlyContrib={monthlyContrib} onMonthlyContribChange={setMonthlyContrib} />
           </div>
         )}
-
       </main>
 
       <footer style={{
-        borderTop: '0.5px solid var(--border-dim)',
-        padding: '8px 20px',
-        fontSize: 9,
-        color: 'var(--text-muted)',
-        letterSpacing: 2,
-        display: 'flex',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: 4,
+        borderTop: '1px solid var(--border-dim)',
+        padding: '10px 22px', fontSize: 11,
+        color: 'var(--text-muted)', display: 'flex',
+        justifyContent: 'space-between', flexWrap: 'wrap', gap: 4,
       }}>
-        <span>MARKET INTELLIGENCE v1.0</span>
+        <span>Market Intelligence v2.0</span>
         <span>Não é aconselhamento financeiro · Uso pessoal</span>
       </footer>
     </div>
