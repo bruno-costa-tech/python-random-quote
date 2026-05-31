@@ -41,8 +41,8 @@ export default function MarketSignals({ values, onChange }) {
               <div>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: 1, marginBottom: 4 }}>
                   {ind.label}
-                  <span style={{ marginLeft: 8, color: '#333366', fontSize: 9 }}>
-                    [{ind.hint}]
+                  <span style={{ marginLeft: 8, color: 'var(--text-muted)', fontSize: 11 }}>
+                    {ind.hint}
                   </span>
                 </div>
                 <input

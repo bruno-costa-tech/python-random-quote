@@ -1,24 +1,39 @@
-export default function Header() {
+export default function Header({ hasKey, onOpenKeyModal }) {
   return (
     <header style={{
-      borderBottom: '0.5px solid var(--border-dim)',
-      padding: '12px 20px',
+      borderBottom: '1px solid var(--border-dim)',
+      padding: '16px 22px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      background: 'var(--bg-secondary)',
+      background: 'rgba(255,255,255,0.8)',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
+      position: 'sticky',
+      top: 0,
+      zIndex: 100,
     }}>
       <span style={{
-        fontSize: 13,
-        letterSpacing: 4,
-        color: 'var(--text-secondary)',
-        fontWeight: 'normal',
+        fontSize: 17,
+        letterSpacing: -0.3,
+        color: 'var(--text-primary)',
+        fontWeight: 600,
       }}>
-        ◈ MARKET INTELLIGENCE
+        ◈ Market Intelligence
       </span>
-      <span style={{ fontSize: 10, color: 'var(--text-muted)', letterSpacing: 2 }}>
-        BRUNO COSTA · DUBAI
-      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <button
+          className="btn-secondary"
+          onClick={onOpenKeyModal}
+          style={{ display: 'flex', alignItems: 'center', gap: 7 }}
+        >
+          <span className={`dot ${hasKey ? 'dot-green' : 'dot-gray'}`} />
+          API Key
+        </button>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
+          Bruno Costa · Dubai
+        </span>
+      </div>
     </header>
   );
 }

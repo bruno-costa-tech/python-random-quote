@@ -40,9 +40,9 @@ function MiniChart({ data, years }) {
       {yTicks.map(t => (
         <g key={t.y}>
           <line x1={pad.left} y1={t.y} x2={w - pad.right} y2={t.y}
-            stroke="#1a1a3a" strokeWidth="0.5" />
+            stroke="#e8e8ed" strokeWidth="1" />
           <text x={pad.left - 6} y={t.y + 4} textAnchor="end"
-            fontSize="9" fill="#555588" fontFamily="Courier New">
+            fontSize="10" fill="#86868b" fontFamily="-apple-system, sans-serif">
             {t.label}
           </text>
         </g>
@@ -53,7 +53,7 @@ function MiniChart({ data, years }) {
         const x = pad.left + (idx / years) * chartW;
         return (
           <text key={yr} x={x} y={h - 6} textAnchor="middle"
-            fontSize="9" fill="#555588" fontFamily="Courier New">
+            fontSize="10" fill="#86868b" fontFamily="-apple-system, sans-serif">
             {yr}a
           </text>
         );
@@ -61,8 +61,8 @@ function MiniChart({ data, years }) {
       {/* Area fill */}
       <defs>
         <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#6666ff" stopOpacity="0.15" />
-          <stop offset="100%" stopColor="#6666ff" stopOpacity="0.01" />
+          <stop offset="0%" stopColor="#0071e3" stopOpacity="0.15" />
+          <stop offset="100%" stopColor="#0071e3" stopOpacity="0.01" />
         </linearGradient>
       </defs>
       <polygon
@@ -73,8 +73,8 @@ function MiniChart({ data, years }) {
       <polyline
         points={pts.join(' ')}
         fill="none"
-        stroke="#6666ff"
-        strokeWidth="1.5"
+        stroke="#0071e3"
+        strokeWidth="2"
       />
     </svg>
   );

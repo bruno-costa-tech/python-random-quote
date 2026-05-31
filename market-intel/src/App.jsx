@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import Header from './components/Header.jsx';
 import Navigation from './components/Navigation.jsx';
+import ApiKeyModal from './components/ApiKeyModal.jsx';
+import { API_KEY_STORAGE, getApiKey } from './lib/anthropic.js';
 
 import PriceBar from './components/dashboard/PriceBar.jsx';
 import MarketSignals from './components/dashboard/MarketSignals.jsx';
@@ -30,6 +32,19 @@ const EMPTY_FIELDS = {
 
 export default function App() {
   const [tab, setTab] = useState('dashboard');
+
+  // API key state — prompt on first load if none stored
+  const [apiKey, setApiKey] = useState(() => getApiKey());
+  const [showKeyModal, setShowKeyModal] = useState(() => !getApiKey());
+
+  function saveApiKey(key) {
+    try {
+      if (key) localStorage.setItem(API_KEY_STORAGE, key);
+      else localStorage.removeItem(API_KEY_STORAGE);
+    } catch { /* localStorage unavailable */ }
+    setApiKey(key);
+    setShowKeyModal(false);
+  }
 
   // Dashboard state
   const [indicators, setIndicators] = useState({
@@ -66,7 +81,14 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <Header />
+      {showKeyModal && (
+        <ApiKeyModal
+          currentKey={apiKey}
+          onSave={saveApiKey}
+          onClose={() => setShowKeyModal(false)}
+        />
+      )}
+      <Header hasKey={!!apiKey} onOpenKeyModal={() => setShowKeyModal(true)} />
       <Navigation active={tab} onChange={setTab} />
 
       <main style={{ flex: 1, padding: '16px 20px', maxWidth: 960, width: '100%', margin: '0 auto' }}>

@@ -1,7 +1,20 @@
 const ANTHROPIC_API = 'https://api.anthropic.com/v1/messages';
 
+export const API_KEY_STORAGE = 'mid_api_key';
+
+export function getApiKey() {
+  try {
+    return localStorage.getItem(API_KEY_STORAGE) || import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+  } catch {
+    return import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+  }
+}
+
 export async function callClaude({ prompt, useWebSearch = false, maxTokens = 1500 }) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY || '';
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error('Sem API key. Clica em "API Key" no topo da página e introduz a tua chave Anthropic.');
+  }
 
   const body = {
     model: 'claude-sonnet-4-20250514',

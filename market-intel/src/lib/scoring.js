@@ -55,8 +55,8 @@ export function calcScore(fields) {
 }
 
 export function scoreTier(score) {
-  if (score >= 75) return { label: 'ALTO RISCO DE EXPLOSÃO', color: '#e24b4a' };
-  if (score >= 55) return { label: 'SETUP INTERESSANTE',     color: '#ef9f27' };
-  if (score >= 35) return { label: 'POTENCIAL MODERADO',     color: '#639922' };
-  return             { label: 'SETUP FRACO',                 color: '#444466' };
+  if (score >= 75) return { label: 'ALTO RISCO DE EXPLOSÃO', color: '#ff3b30' };
+  if (score >= 55) return { label: 'SETUP INTERESSANTE',     color: '#ff9500' };
+  if (score >= 35) return { label: 'POTENCIAL MODERADO',     color: '#34c759' };
+  return             { label: 'SETUP FRACO',                 color: '#86868b' };
 }
