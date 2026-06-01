@@ -168,6 +168,87 @@ function tier(s) {
   return             { label:'SEM SINAL',        color:'#c7c7cc', bg:'#fafafa' };
 }
 
+// ── EIXO 2: "estou a comprar certo?" (vocacionado para swing) ─────────────────
+// Detector de fase do movimento — o coração do "entrar cedo, não no topo"
+function entryPhase(t) {
+  const { m5, h1, h6, h24 } = t.ch;
+  // Parabólico / já esticado → comprar agora = comprar o topo
+  if (h24 > 250 || (m5 > 40 && h1 > 80))
+    return { key:'top', label:'ESTICADO', color:'#ff3b30',
+      note:`Já ${pct(h24,0)} em 24h — alto risco de comprar perto do topo. Esperar correcção.` };
+  // A recuar depois de subir → momentum a esvair
+  if (h1 < -5 && h24 > 15)
+    return { key:'cool', label:'A ARREFECER', color:'#ff9500',
+      note:`Preço a recuar (${pct(h1)} na última hora) depois de ter subido. Momentum a perder força.` };
+  // Zona ideal de entrada para swing: subida moderada, tendência positiva, sem parabólica
+  if (h24 >= 8 && h24 <= 150 && h6 > 0 && h1 > -2 && m5 > -3)
+    return { key:'early', label:'FASE INICIAL', color:'#34c759',
+      note:'Movimento ainda no início, tendência positiva e sem parabólica. Boa zona de entrada para swing.' };
+  // A construir momentum
+  if (h1 > 0 && h6 > 0)
+    return { key:'heat', label:'A AQUECER', color:'#0071e3',
+      note:'Momentum a construir-se. Vigiar de perto para confirmar a entrada.' };
+  return { key:'weak', label:'SEM TENDÊNCIA', color:'#86868b',
+    note:'Sem momentum claro. Pouco interesse para swing neste momento.' };
+}
+
+// Checklist fixa de 8 critérios (swing) — informativa, não bloqueia
+function buildChecklist(t) {
+  const tot1h   = t.txn.buys1h + t.txn.sells1h;
+  const buyR1h  = tot1h > 0 ? t.txn.buys1h / tot1h : null;
+  const liqMcap = t.mcap > 0 ? t.liq / t.mcap : null;
+  return [
+    { key:'liq',     label:'Liquidez saudável (≥ $30K)',        pass: t.liq >= 30000,
+      critical: t.liq < 10000,                                   detail: fmt(t.liq) },
+    { key:'liqmcap', label:'Pool não é fina (liq ≥ 3% do MCap)', pass: liqMcap == null || liqMcap >= 0.03,
+      detail: liqMcap != null ? `${(liqMcap*100).toFixed(1)}%` : '—' },
+    { key:'notop',   label:'Não esticado (< +250% em 24h)',     pass: t.ch.h24 < 250,
+      detail: pct(t.ch.h24,0) },
+    { key:'mom',     label:'Tendência horária positiva',        pass: t.ch.h1 > 0,
+      detail: pct(t.ch.h1) },
+    { key:'buys',    label:'Compradores dominam (1h)',          pass: buyR1h != null && buyR1h > 0.5,
+      detail: buyR1h != null ? `${Math.round(buyR1h*100)}% buys` : 'sem dados' },
+    { key:'age',     label:'Sobreviveu ao arranque (≥ 6h)',     pass: t.ageH == null || t.ageH >= 6,
+      critical: t.ageH != null && t.ageH < 0.5,                  detail: t.ageH != null ? ageStr(t.ageH) : '—' },
+    { key:'vol',     label:'Volume real (≥ $50K em 24h)',       pass: t.vol.h24 >= 50000,
+      detail: fmt(t.vol.h24) },
+    { key:'trend',   label:'Positivo nas 24h',                  pass: t.ch.h24 > 0,
+      detail: pct(t.ch.h24,0) },
+  ];
+}
+
+function assess(t) {
+  const phase     = entryPhase(t);
+  const checklist = buildChecklist(t);
+  const passed    = checklist.filter(c => c.pass).length;
+  const failedCrit= checklist.some(c => c.critical);
+  const tot1h     = t.txn.buys1h + t.txn.sells1h;
+  const sellHeavy = tot1h >= 10 && (t.txn.sells1h / tot1h) > 0.85; // possível honeypot/distribuição
+
+  let verdict;
+  if (failedCrit || sellHeavy) {
+    verdict = { label:'EVITAR', color:'#ff3b30',
+      reason: sellHeavy ? 'Vendas dominam fortemente — possível honeypot ou distribuição.'
+        : t.liq < 10000 ? `Liquidez ${fmt(t.liq)} — risco de rug muito elevado.`
+        : 'Token com < 30min — especulação pura, sem histórico.' };
+  } else if (phase.key === 'top') {
+    verdict = { label:'EVITAR', color:'#ff3b30',
+      reason:'Já muito esticado — comprar agora é comprar o topo.' };
+  } else if (phase.key === 'cool') {
+    verdict = { label:'ESPERAR', color:'#ff9500',
+      reason:'A arrefecer — esperar estabilização ou pullback antes de entrar.' };
+  } else if ((phase.key === 'early' || phase.key === 'heat') && passed >= 5) {
+    verdict = { label:'COMPRAR', color:'#248a3d',
+      reason:`Fase "${phase.label.toLowerCase()}" + ${passed}/8 critérios cumpridos. Entrada favorável para swing.` };
+  } else {
+    verdict = { label:'ESPERAR', color:'#ff9500',
+      reason:`Só ${passed}/8 critérios cumpridos — aguardar confirmação de mais sinais.` };
+  }
+  return { verdict, phase, checklist, passed };
+}
+
+const VERDICT_ORDER = { COMPRAR: 0, ESPERAR: 1, EVITAR: 2 };
+
 const CHAINS = {
   solana:   { l:'SOL',  c:'#9945ff' }, ethereum: { l:'ETH',  c:'#627eea' },
   bsc:      { l:'BSC',  c:'#f0b90b' }, base:     { l:'BASE', c:'#0052ff' },
@@ -202,7 +283,7 @@ const DEMOS = [
     ch:{m5:1.3,h1:3.8,h6:8.2,h24:12.5}, vol:{m5:1800,h1:14000,h6:38000,h24:95000},
     txn:{buys5m:8,sells5m:6,buys1h:62,sells1h:55}, mcap:8500000,fdv:9200000,liq:185000,
     ageH:96, _analysis: null },
-].map(t => ({ ...t, _analysis: calcScore(t) }))
+].map(t => ({ ...t, _analysis: calcScore(t), _assess: assess(t) }))
  .sort((a,b) => b._analysis.score - a._analysis.score);
 
 // ── fetch ─────────────────────────────────────────────────────────────────────
@@ -217,25 +298,41 @@ async function apiFetch(url) {
 
 const SEARCH_QUERIES = ['sol', 'pump', 'pepe', 'cat', 'ai', 'wif'];
 
+// Resolve token addresses → full pair data (DexScreener allows up to 30 per call)
+async function tokensToPairs(addresses) {
+  const out = [];
+  for (let i = 0; i < addresses.length; i += 30) {
+    const batch = addresses.slice(i, i + 30).join(',');
+    try {
+      const d = await apiFetch(dexUrl(`/latest/dex/tokens/${batch}`));
+      if (d?.pairs) out.push(...d.pairs);
+    } catch { /* non-fatal */ }
+  }
+  return out;
+}
+
 async function loadTrending() {
-  // Try token boosts first (best signal for upcoming pumps)
-  const [boostsResult, ...searchResults] = await Promise.allSettled([
+  // Three discovery sources in parallel:
+  //  - token-profiles/latest : tokens MAIS RECENTES (descoberta cedo)
+  //  - token-boosts/top      : tokens promovidos (sinal de pump iminente)
+  //  - search                : tokens meme com mais actividade
+  const [profilesRes, boostsRes, ...searchRes] = await Promise.allSettled([
+    apiFetch(dexUrl('/token-profiles/latest/v1')),
     apiFetch(dexUrl('/token-boosts/top/v1')),
     ...SEARCH_QUERIES.slice(0, 4).map(q => apiFetch(dexUrl(`/latest/dex/search?q=${q}`))),
   ]);
 
-  const pairs = searchResults.flatMap(r => r.status === 'fulfilled' ? (r.value?.pairs || []) : []);
+  const pairs = searchRes.flatMap(r => r.status === 'fulfilled' ? (r.value?.pairs || []) : []);
 
-  // Enrich with boost tokens
-  if (boostsResult.status === 'fulfilled' && Array.isArray(boostsResult.value)) {
-    const addrs = boostsResult.value.slice(0, 20).map(b => b.tokenAddress).filter(Boolean);
-    if (addrs.length > 0) {
-      try {
-        const tokenData = await apiFetch(dexUrl(`/latest/dex/tokens/${addrs.slice(0,10).join(',')}`));
-        if (tokenData?.pairs) pairs.push(...tokenData.pairs);
-      } catch { /* non-fatal */ }
-    }
-  }
+  // Collect token addresses from profiles + boosts, then enrich to full pair data
+  const addrs = [];
+  if (profilesRes.status === 'fulfilled' && Array.isArray(profilesRes.value))
+    addrs.push(...profilesRes.value.map(p => p.tokenAddress).filter(Boolean));
+  if (boostsRes.status === 'fulfilled' && Array.isArray(boostsRes.value))
+    addrs.push(...boostsRes.value.map(b => b.tokenAddress).filter(Boolean));
+
+  const uniqueAddrs = [...new Set(addrs)].slice(0, 60);
+  if (uniqueAddrs.length > 0) pairs.push(...await tokensToPairs(uniqueAddrs));
 
   // Dedupe by pairAddress
   const seen = new Set();
@@ -267,12 +364,12 @@ function SigBar({ label, pts, max, c }) {
 
 function HeroCard({ t, rank }) {
   const { score: sc, signals, risks, insights } = t._analysis;
-  const tr = tier(sc);
+  const { verdict, phase, checklist, passed } = t._assess;
   const isTop = rank === 0;
 
   return (
-    <div className="card" style={{ border: isTop ? `2px solid ${tr.color}` : '1px solid var(--border-dim)', background: isTop ? tr.bg : undefined, position:'relative' }}>
-      {isTop && <div style={{ position:'absolute', top:0, left:0, right:0, height:3, borderRadius:'16px 16px 0 0', background:`linear-gradient(90deg,${tr.color},${tr.color}40)` }}/>}
+    <div className="card" style={{ border: isTop ? `2px solid ${verdict.color}` : '1px solid var(--border-dim)', background: isTop ? verdict.color+'08' : undefined, position:'relative' }}>
+      {isTop && <div style={{ position:'absolute', top:0, left:0, right:0, height:3, borderRadius:'16px 16px 0 0', background:`linear-gradient(90deg,${verdict.color},${verdict.color}40)` }}/>}
 
       {t._isDemo && (
         <div style={{ fontSize:10, fontWeight:600, color:'#86868b', background:'#f5f5f7', padding:'2px 8px', borderRadius:6, display:'inline-block', marginBottom:6 }}>
@@ -282,20 +379,32 @@ function HeroCard({ t, rank }) {
 
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
         <div>
-          {isTop && <div style={{ fontSize:10, fontWeight:700, color:tr.color, letterSpacing:.5, marginBottom:3 }}>#{rank+1} MAIS EXPLOSIVO AGORA</div>}
+          {isTop && <div style={{ fontSize:10, fontWeight:700, color:'var(--text-muted)', letterSpacing:.5, marginBottom:3 }}>#{rank+1} TOP CANDIDATO</div>}
           <div style={{ fontSize:isTop?20:16, fontWeight:700, letterSpacing:-.3 }}>{t.name}</div>
           <div style={{ fontSize:11, color:'var(--text-muted)' }}>{t.full}</div>
           <div style={{ marginTop:5, display:'flex', gap:5, flexWrap:'wrap' }}>
             <ChainBadge chain={t.chain}/>
             {t.ageH != null && <span style={{ fontSize:10, color:'var(--text-muted)', background:'#f5f5f7', padding:'2px 7px', borderRadius:6 }}>{ageStr(t.ageH)}</span>}
+            <span style={{ fontSize:10, fontWeight:700, color:tier(sc).color, background:tier(sc).color+'18', padding:'2px 7px', borderRadius:6 }}>Score {sc}</span>
           </div>
         </div>
         <div style={{ textAlign:'right', flexShrink:0, marginLeft:10 }}>
-          <div style={{ fontSize:isTop?44:30, fontWeight:700, color:tr.color, lineHeight:1 }}>{sc}</div>
-          <div style={{ fontSize:10, fontWeight:600, color:tr.color }}>{tr.label}</div>
-          <div style={{ fontSize:13, fontWeight:600, marginTop:5 }}>{fmtPrice(t.price)}</div>
+          <div style={{ fontSize:13, fontWeight:600 }}>{fmtPrice(t.price)}</div>
           <div style={{ fontSize:12, fontWeight:700, color:cc(t.ch.m5) }}>{pct(t.ch.m5)}<span style={{ fontSize:10, color:'var(--text-muted)', fontWeight:400 }}> 5m</span></div>
+          <div style={{ fontSize:12, fontWeight:600, color:cc(t.ch.h24) }}>{pct(t.ch.h24,0)}<span style={{ fontSize:10, color:'var(--text-muted)', fontWeight:400 }}> 24h</span></div>
         </div>
+      </div>
+
+      {/* VEREDICTO — o headline */}
+      <div style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', borderRadius:10, background:verdict.color+'12', border:`1px solid ${verdict.color}30`, marginBottom:8 }}>
+        <div style={{ fontSize:isTop?22:18, fontWeight:800, color:verdict.color, letterSpacing:-.3, flexShrink:0 }}>{verdict.label}</div>
+        <div style={{ fontSize:11, color:'var(--text-secondary)', lineHeight:1.4 }}>{verdict.reason}</div>
+      </div>
+
+      {/* Fase do movimento */}
+      <div style={{ display:'flex', alignItems:'flex-start', gap:8, marginBottom:10 }}>
+        <span style={{ fontSize:10, fontWeight:700, color:phase.color, background:phase.color+'18', padding:'3px 8px', borderRadius:6, whiteSpace:'nowrap', flexShrink:0 }}>{phase.label}</span>
+        <span style={{ fontSize:11, color:'var(--text-muted)', lineHeight:1.4 }}>{phase.note}</span>
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6, marginBottom:10 }}>
@@ -307,7 +416,23 @@ function HeroCard({ t, rank }) {
         ))}
       </div>
 
-      {signals.length > 0 && (
+      {/* Checklist 8 critérios */}
+      <div style={{ marginBottom:10 }}>
+        <div style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', marginBottom:6, textTransform:'uppercase', letterSpacing:.3, display:'flex', justifyContent:'space-between' }}>
+          <span>Checklist</span><span style={{ color:passed>=5?'#248a3d':passed>=3?'#ff9500':'#ff3b30' }}>{passed}/8</span>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns: isTop ? '1fr 1fr' : '1fr', gap:'3px 12px' }}>
+          {checklist.map(c=>(
+            <div key={c.key} style={{ display:'flex', alignItems:'center', gap:6, fontSize:11 }}>
+              <span style={{ color:c.pass?'#248a3d':'#ff3b30', fontWeight:700, flexShrink:0 }}>{c.pass?'✓':'✗'}</span>
+              <span style={{ color:'var(--text-secondary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.label}</span>
+              <span style={{ color:'var(--text-muted)', marginLeft:'auto', flexShrink:0 }}>{c.detail}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {signals.length > 0 && isTop && (
         <div style={{ marginBottom:10 }}>
           {signals.map(s=><SigBar key={s.key} {...s}/>)}
         </div>
@@ -346,7 +471,8 @@ export default function CryptoTab() {
   const [searchMode, setSM]     = useState(false);
   const [filterChain, setFC]    = useState('all');
   const [minScore, setMS]       = useState(0);
-  const [sortKey, setSK]        = useState('score');
+  const [filterVerdict, setFV]  = useState('all');
+  const [sortKey, setSK]        = useState('verdict');
   const [sortDir, setSD]        = useState('desc');
   const [watchlist, setWL]      = useState(loadWL);
   const [countdown, setCD]      = useState(REFRESH_SEC);
@@ -354,8 +480,8 @@ export default function CryptoTab() {
 
   function process(raw) {
     return raw
-      .map(p => ({ ...normalize(p), _analysis: null }))
-      .map(t => ({ ...t, _analysis: calcScore(t) }))
+      .map(p => normalize(p))
+      .map(t => ({ ...t, _analysis: calcScore(t), _assess: assess(t) }))
       .filter(t => t.liq >= 2000 && (t.mcap > 0 || t.vol.h24 > 0))
       .sort((a,b) => b._analysis.score - a._analysis.score);
   }
@@ -412,12 +538,18 @@ export default function CryptoTab() {
 
   const chains = ['all', ...new Set(tokens.map(t=>t.chain).filter(Boolean))];
   const wlIds  = new Set(watchlist.map(w=>w.id));
-  const sortFn = { score:t=>t._analysis.score, ch5m:t=>t.ch.m5, ch1h:t=>t.ch.h1, vol:t=>t.vol.h24, mcap:t=>t.mcap, liq:t=>t.liq };
+  // verdict sorts COMPRAR>ESPERAR>EVITAR, then by score within the same verdict
+  const sortFn = {
+    verdict: t => (2 - VERDICT_ORDER[t._assess.verdict.label]) * 1000 + t._analysis.score,
+    score: t=>t._analysis.score, ch5m:t=>t.ch.m5, ch1h:t=>t.ch.h1,
+    vol:t=>t.vol.h24, mcap:t=>t.mcap, liq:t=>t.liq,
+  };
   const filtered = tokens
     .filter(t => filterChain==='all' || t.chain===filterChain)
     .filter(t => t._analysis.score >= minScore)
+    .filter(t => filterVerdict==='all' || t._assess.verdict.label===filterVerdict)
     .sort((a,b) => {
-      const fn = sortFn[sortKey] || (t=>t._analysis.score);
+      const fn = sortFn[sortKey] || sortFn.verdict;
       return sortDir==='desc' ? fn(b)-fn(a) : fn(a)-fn(b);
     });
 
@@ -471,6 +603,21 @@ export default function CryptoTab() {
           )}
         </div>
 
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginTop:10 }}>
+          <span style={{ fontSize:11, fontWeight:600, color:'var(--text-muted)' }}>VEREDICTO</span>
+          {[
+            { v:'all',     l:'Todos',   c:'#1d1d1f' },
+            { v:'COMPRAR', l:'Comprar', c:'#248a3d' },
+            { v:'ESPERAR', l:'Esperar', c:'#ff9500' },
+            { v:'EVITAR',  l:'Evitar',  c:'#ff3b30' },
+          ].map(o=>(
+            <button key={o.v} onClick={()=>setFV(o.v)} style={{
+              background:filterVerdict===o.v?o.c:'transparent', border:`1px solid ${filterVerdict===o.v?o.c:'var(--border-mid)'}`,
+              color:filterVerdict===o.v?'#fff':'var(--text-secondary)', fontSize:11,fontWeight:600,padding:'4px 12px',borderRadius:980,cursor:'pointer',
+            }}>{o.l}</button>
+          ))}
+        </div>
+
         {/* Error / CORS notice */}
         {(error || isDemo) && (
           <div style={{ marginTop:12, padding:'12px 14px', borderRadius:12, background: isDemo&&!error ? '#f5f5f7' : '#fff5f5', border:`1px solid ${isDemo&&!error?'var(--border-dim)':'#ff3b3025'}` }}>
@@ -516,14 +663,15 @@ export default function CryptoTab() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th onClick={()=>sort('verdict')} style={{ cursor:'pointer' }}>Veredicto {sortKey==='verdict'&&<span style={{opacity:.4}}>{sortDir==='asc'?'↑':'↓'}</span>}</th>
                   <th>Chain</th><th>Token</th>
-                  <th onClick={()=>sort('ch5m')} style={{ cursor:'pointer' }}>5m% {sortKey==='ch5m'&&<span style={{opacity:.4}}>{sortDir==='asc'?'↑':'↓'}</span>}</th>
+                  <th>Fase</th>
                   <th onClick={()=>sort('ch1h')} style={{ cursor:'pointer' }}>1h% {sortKey==='ch1h'&&<span style={{opacity:.4}}>{sortDir==='asc'?'↑':'↓'}</span>}</th>
                   <th>24h%</th>
                   <th onClick={()=>sort('vol')} style={{ cursor:'pointer' }}>Vol 24h {sortKey==='vol'&&<span style={{opacity:.4}}>{sortDir==='asc'?'↑':'↓'}</span>}</th>
                   <th onClick={()=>sort('mcap')} style={{ cursor:'pointer' }}>MCap {sortKey==='mcap'&&<span style={{opacity:.4}}>{sortDir==='asc'?'↑':'↓'}</span>}</th>
                   <th onClick={()=>sort('liq')} style={{ cursor:'pointer' }}>Liq {sortKey==='liq'&&<span style={{opacity:.4}}>{sortDir==='asc'?'↑':'↓'}</span>}</th>
-                  <th>Buys 5m</th>
+                  <th>Checklist</th>
                   <th onClick={()=>sort('score')} style={{ cursor:'pointer' }}>Score {sortKey==='score'&&<span style={{opacity:.4}}>{sortDir==='asc'?'↑':'↓'}</span>}</th>
                   <th style={{ width:80 }}></th>
                 </tr>
@@ -531,33 +679,29 @@ export default function CryptoTab() {
               <tbody>
                 {rest.map(t => {
                   const { score:sc, risks } = t._analysis;
+                  const { verdict, phase, passed } = t._assess;
                   const tr = tier(sc);
-                  const tot = t.txn.buys5m + t.txn.sells5m;
-                  const bp  = tot > 0 ? Math.round(t.txn.buys5m/tot*100) : null;
                   return (
                     <tr key={t.id} style={{ background:risks.some(r=>r.lvl==='danger')?'#fff8f8':undefined }}>
+                      <td>
+                        <span style={{ fontSize:11, fontWeight:700, padding:'3px 9px', borderRadius:980, background:verdict.color+'18', color:verdict.color, whiteSpace:'nowrap' }}>{verdict.label}</span>
+                      </td>
                       <td><ChainBadge chain={t.chain}/></td>
                       <td>
                         <div style={{ fontWeight:700, fontSize:13 }}>{t.name}</div>
                         {t.ageH!=null && <div style={{ fontSize:10, color:'var(--text-muted)' }}>{ageStr(t.ageH)}</div>}
                       </td>
-                      <td style={{ fontWeight:700, color:cc(t.ch.m5) }}>{pct(t.ch.m5)}</td>
+                      <td><span style={{ fontSize:10, fontWeight:600, color:phase.color, whiteSpace:'nowrap' }}>{phase.label}</span></td>
                       <td style={{ fontWeight:600, color:cc(t.ch.h1) }}>{pct(t.ch.h1)}</td>
                       <td style={{ color:cc(t.ch.h24) }}>{pct(t.ch.h24,0)}</td>
                       <td>{fmt(t.vol.h24)}</td>
                       <td>{fmt(t.mcap)}</td>
                       <td style={{ color:t.liq<10000?'#ff3b30':undefined }}>{fmt(t.liq)}</td>
                       <td>
-                        {bp!=null ? (
-                          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                            <div style={{ width:36 }} className="bar-track"><div className="bar-fill" style={{ width:`${bp}%`, background:bp>65?'#34c759':bp>50?'#ff9500':'#ff3b30' }}/></div>
-                            <span style={{ fontSize:11 }}>{bp}%</span>
-                          </div>
-                        ) : '—'}
+                        <span style={{ fontSize:12, fontWeight:600, color:passed>=5?'#248a3d':passed>=3?'#ff9500':'#ff3b30' }}>{passed}/8</span>
                       </td>
                       <td>
-                        <span style={{ fontWeight:700, color:tr.color, fontSize:15 }}>{sc} </span>
-                        <span style={{ fontSize:10, fontWeight:600, padding:'2px 7px', borderRadius:980, background:tr.color+'18', color:tr.color }}>{tr.label}</span>
+                        <span style={{ fontWeight:700, color:tr.color, fontSize:15 }}>{sc}</span>
                       </td>
                       <td>
                         <div style={{ display:'flex', gap:5 }}>
@@ -602,9 +746,24 @@ export default function CryptoTab() {
         </div>
       )}
 
-      {/* Score methodology */}
+      {/* Two-axis explainer */}
       <div className="card" style={{ background:'#f5f5f7', padding:'14px 18px' }}>
-        <div style={{ fontSize:11, fontWeight:600, color:'var(--text-muted)', marginBottom:8, textTransform:'uppercase', letterSpacing:.4 }}>Metodologia do Score (100 pts)</div>
+        <div style={{ fontSize:11, fontWeight:600, color:'var(--text-muted)', marginBottom:8, textTransform:'uppercase', letterSpacing:.4 }}>Como Ler — Dois Eixos Independentes</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+          <div style={{ background:'#fff', borderRadius:10, padding:'10px 12px', border:'1px solid var(--border-dim)' }}>
+            <div style={{ fontSize:12, fontWeight:700, marginBottom:3 }}>Score = quão quente está 🔥</div>
+            <div style={{ fontSize:11, color:'var(--text-secondary)', lineHeight:1.5 }}>Mede o momentum/explosividade actual. Um score alto diz que <em>está a acontecer agora</em> — mas não que é boa altura para comprar.</div>
+          </div>
+          <div style={{ background:'#fff', borderRadius:10, padding:'10px 12px', border:'1px solid var(--border-dim)' }}>
+            <div style={{ fontSize:12, fontWeight:700, marginBottom:3 }}>Veredicto = devo comprar? 🎯</div>
+            <div style={{ fontSize:11, color:'var(--text-secondary)', lineHeight:1.5 }}><strong style={{ color:'#248a3d' }}>COMPRAR</strong> (fase inicial, seguro) · <strong style={{ color:'#ff9500' }}>ESPERAR</strong> (esticado/a arrefecer) · <strong style={{ color:'#ff3b30' }}>EVITAR</strong> (topo ou risco de rug).</div>
+          </div>
+        </div>
+        <div style={{ fontSize:11, color:'var(--text-secondary)', lineHeight:1.5, marginBottom:14, padding:'8px 12px', background:'#fff', borderRadius:8, border:'1px solid var(--border-dim)' }}>
+          💡 <strong>A chave para comprar certo:</strong> um token pode ter <strong>Score 90 e Veredicto EVITAR</strong> — está explosivo mas já fez +380%, e comprar agora é comprar o topo. Procura <strong>Veredicto COMPRAR em Fase Inicial</strong>: ainda cedo no movimento.
+        </div>
+
+        <div style={{ fontSize:11, fontWeight:600, color:'var(--text-muted)', marginBottom:8, textTransform:'uppercase', letterSpacing:.4 }}>Composição do Score (100 pts)</div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))', gap:5 }}>
           {[
             { l:'Momentum 5m',          max:25, c:'#ff3b30', d:'Subida de preço nos últimos 5min — o sinal mais imediato de pump' },
@@ -621,7 +780,8 @@ export default function CryptoTab() {
           ))}
         </div>
         <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:10, lineHeight:1.5 }}>
-          Dados via DexScreener (trending + boosts + pesquisa). Auto-refresh 60s. Meme coins têm risco de perda total — usa stop-loss e nunca aloques mais do que podes perder.
+          Dados via DexScreener: tokens recentes (token-profiles) + promovidos (boosts) + pesquisa. Auto-refresh 60s.
+          O <strong>Veredicto</strong> usa 8 critérios de segurança/timing vocacionados para swing (dias-semanas). Meme coins têm risco de perda total — usa stop-loss e nunca aloques mais do que podes perder.
         </div>
       </div>
     </div>
