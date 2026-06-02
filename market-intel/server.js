@@ -17,6 +17,7 @@ const ALLOWED_HOSTS = [
   'api.geckoterminal.com',
   'api.dexscreener.com',
   'api.coingecko.com',
+  'min-api.cryptocompare.com',
 ];
 
 function proxyFetch(targetUrl) {

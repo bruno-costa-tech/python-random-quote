@@ -13,6 +13,11 @@ function dexUrl(path) {
   if (LOCAL) return `/api/proxy?url=${encodeURIComponent('https://api.dexscreener.com' + path)}`;
   return `https://api.dexscreener.com${path}`;
 }
+function ccUrl(path) {
+  if (DEV)   return `/proxy/cc${path}`;
+  if (LOCAL) return `/api/proxy?url=${encodeURIComponent('https://min-api.cryptocompare.com' + path)}`;
+  return `https://min-api.cryptocompare.com${path}`;
+}
 
 const LS_KEY      = 'mid_crypto_v4';
 const REFRESH_SEC = 60;
@@ -39,6 +44,12 @@ function pct(v, d = 1) {
   return (v > 0 ? '+' : '') + parseFloat(v).toFixed(d) + '%';
 }
 function cc(v) { return v > 0 ? '#248a3d' : v < 0 ? '#ff3b30' : 'var(--text-muted)'; }
+function newsTimeAgo(ts) {
+  const mins = Math.floor((Date.now() / 1000 - ts) / 60);
+  if (mins < 60) return `${mins}min`;
+  if (mins < 1440) return `${Math.floor(mins / 60)}h`;
+  return `${Math.floor(mins / 1440)}d`;
+}
 function ageStr(h) {
   if (h == null) return null;
   if (h < 1)   return `${Math.round(h * 60)}min`;
@@ -461,6 +472,59 @@ function HeroCard({ t, rank }) {
   );
 }
 
+function NewsPanel({ news, loading, topTokens, onRefresh }) {
+  const topNames = topTokens.map(t => t.name.toLowerCase());
+  return (
+    <div className="card" style={{ padding:'14px 16px' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+        <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:.4, color:'var(--text-muted)' }}>Notícias Crypto</span>
+        <button className="btn-secondary" style={{ padding:'2px 8px', fontSize:11 }} onClick={onRefresh} disabled={loading}>
+          {loading ? <span className="loader" style={{ width:10, height:10 }}/> : '↻'}
+        </button>
+      </div>
+      {loading && news.length === 0 && (
+        <div style={{ display:'flex', justifyContent:'center', padding:'20px 0' }}>
+          <span className="loader"/>
+        </div>
+      )}
+      {!loading && news.length === 0 && (
+        <div style={{ fontSize:11, color:'var(--text-muted)', textAlign:'center', padding:'16px 0', lineHeight:1.6 }}>
+          Notícias indisponíveis.<br/>Serve via localhost para dados reais.
+        </div>
+      )}
+      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+        {news.map((n, i) => {
+          const title = n.title || '';
+          const mentionedNames = topTokens
+            .filter(t => t.name.length > 2 && title.toLowerCase().includes(t.name.toLowerCase()))
+            .map(t => t.name);
+          const mentioned = mentionedNames.length > 0;
+          return (
+            <a key={i} href={n.url} target="_blank" rel="noopener noreferrer"
+              style={{ textDecoration:'none', display:'block', padding:'8px 10px', borderRadius:8,
+                border:`1px solid ${mentioned ? '#0071e330' : 'var(--border-dim)'}`,
+                background: mentioned ? '#f0f4ff' : undefined }}>
+              <div style={{ display:'flex', justifyContent:'space-between', gap:6, marginBottom:3 }}>
+                <span style={{ fontSize:10, fontWeight:600, color:'var(--text-muted)', textTransform:'uppercase',
+                  overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {n.source_info?.name || n.source || '—'}
+                </span>
+                <span style={{ fontSize:10, color:'var(--text-muted)', flexShrink:0 }}>{newsTimeAgo(n.published_on)}</span>
+              </div>
+              <div style={{ fontSize:12, fontWeight:500, color:'var(--text-primary)', lineHeight:1.4 }}>{title}</div>
+              {mentioned && (
+                <div style={{ fontSize:10, fontWeight:700, color:'#0071e3', marginTop:4 }}>
+                  Mencionado: {mentionedNames.join(', ')}
+                </div>
+              )}
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── main ──────────────────────────────────────────────────────────────────────
 export default function CryptoTab() {
   const [tokens, setTokens]     = useState(DEMOS);
@@ -477,6 +541,8 @@ export default function CryptoTab() {
   const [watchlist, setWL]      = useState(loadWL);
   const [countdown, setCD]      = useState(REFRESH_SEC);
   const timerRef = useRef(null);
+  const [news, setNews]           = useState([]);
+  const [newsLoading, setNL]      = useState(false);
 
   function process(raw) {
     return raw
@@ -499,6 +565,15 @@ export default function CryptoTab() {
     setLoading(false);
   }, []);
 
+  async function fetchNews() {
+    setNL(true);
+    try {
+      const data = await apiFetch(ccUrl('/data/v2/news/?lang=EN&sortOrder=latest'));
+      if (data?.Data) setNews(data.Data.slice(0, 10));
+    } catch { /* silent — shown as empty panel */ }
+    setNL(false);
+  }
+
   async function handleSearch(e) {
     e?.preventDefault();
     if (!query.trim()) { fetchTrending(); return; }
@@ -513,7 +588,7 @@ export default function CryptoTab() {
     setLoading(false);
   }
 
-  useEffect(() => { fetchTrending(); }, []);
+  useEffect(() => { fetchTrending(); fetchNews(); }, []);
 
   useEffect(() => {
     if (loading || searchMode || isDemo) return;
@@ -644,12 +719,17 @@ export default function CryptoTab() {
         )}
       </div>
 
-      {/* Top 3 hero cards */}
-      {top3.length > 0 && (
-        <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr', gap:12 }}>
-          {top3.map((t,i) => <HeroCard key={t.id} t={t} rank={i}/>)}
+      {/* Hero cards + news panel side-by-side */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 300px', gap:12, alignItems:'start' }}>
+        <div style={{ display:'grid', gap:12 }}>
+          {top3.length > 0 && (
+            <div style={{ display:'grid', gridTemplateColumns:'1.4fr 1fr 1fr', gap:12 }}>
+              {top3.map((t,i) => <HeroCard key={t.id} t={t} rank={i}/>)}
+            </div>
+          )}
         </div>
-      )}
+        <NewsPanel news={news} loading={newsLoading} topTokens={filtered.slice(0, 5)} onRefresh={fetchNews} />
+      </div>
 
       {/* Full table (rest of results) */}
       {rest.length > 0 && (

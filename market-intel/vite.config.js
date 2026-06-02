@@ -16,6 +16,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: path => path.replace(/^\/proxy\/dex/, ''),
       },
+      '/proxy/cc': {
+        target: 'https://min-api.cryptocompare.com',
+        changeOrigin: true,
+        rewrite: path => path.replace(/^\/proxy\/cc/, ''),
+      },
     },
   },
   build: {
